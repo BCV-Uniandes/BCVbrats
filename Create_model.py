@@ -7,158 +7,126 @@ import pdb
 import math
 from settings import gb
 
-# ------ Layers ------
-def weight_variable_msra(shape, name):
-	return tf.get_variable(name=name,shape=shape,initializer=tf.contrib.layers.variance_scaling_initializer())
+# Convolutional layer (Dropout: 2%)
+def conv_layer(input_v, size_in, size_out, name="conv"):
+	with tf.name_scope(name):
+		w = tf.Variable(tf.truncated_normal([3, 3, 3, size_in, size_out], stddev=0.1), name="W")
+		b = tf.Variable(tf.zeros([size_out]), name="B")
+		conv = tf.nn.conv3d(input_v, w, strides=[1, 1, 1, 1, 1], padding="VALID")
+		act = tf.nn.relu(tf.nn.bias_add(conv, b))
+		act = tf.nn.dropout(act, gb.conv_drop)
+		return act
 
-def conv_layer(input_v, size_out, filters, strides=[1]*5, padding='SAME',name='conv3d'):
-	with tf.variable_scope(name):
-		in_features = input_v.get_shape().as_list()[-1]
-		kernel = weight_variable_msra([filters]*3 + [in_features, size_out], name=name+'kernel')
-		output = tf.nn.conv3d(input_v, kernel, strides, padding, name=name)
-	return output
+# Fully connected layer (Dropout: 50%) (Revisar: activación y sizes)
+def dense_layer(input_v, ch_out, name="conv"):
+	with tf.name_scope(name):
+		size = input_v.get_shape().as_list()
+		channels = size[-1]
+		b = tf.Variable(tf.zeros([ch_out]), name="B")
+		conv = tf.layers.dense(input_v, units=ch_out, activation=tf.nn.relu)
+		act = tf.nn.bias_add(conv, b)
+		act = tf.nn.dropout(act, gb.fc_drop)
+		return act
 
-def fc_layer(input_v, ch_out, phase, name='fc'):
-	with tf.variable_scope(name):
-		conv = tf.layers.dense(input_v, use_bias=True, bias_initializer=tf.zeros_initializer(), units=ch_out, activation=tf.nn.relu)
-		act = dropout(conv, gb.fc_drop, phase, name=name+'out')
-		tf.summary.histogram('activations', act)
-	return act
-
-def deconv_layer(input_v, factor, phase, name='deconv'):
-	with tf.variable_scope(name):
-		in_sizes = input_v.get_shape().as_list()
+# Deconvolutional layer (Dropout: 2%)
+def deconv_layer(input_v, factor, name="conv"):
+	with tf.name_scope(name):
+		filter_s = gb.convolutions[-1]
 		shape = tf.shape(input_v)[1]*factor
-		out_shape = tf.stack([in_sizes[0], shape, shape, shape, in_sizes[-1]])
+		out_shape = tf.stack([tf.shape(input_v)[0], shape, shape, shape, filter_s])
 		size = factor*2 - factor%2
 		strides = [1, factor, factor, factor, 1]
-		w = weight_variable_msra([size]*3 + [in_sizes[-1]]*2, name=name+'_kernel')
-		conv = tf.nn.conv3d_transpose(input_v, w, out_shape, strides, padding='SAME', name=name)
-		act = dropout(conv, gb.conv_drop, phase, name=name+'out')
-	return act
+		w = tf.Variable(tf.truncated_normal([size, size, size, filter_s, filter_s], stddev=0.1), name="W")
+		b = tf.Variable(tf.zeros([filter_s]), name="B")
+		conv = tf.nn.conv3d_transpose(input_v, w, out_shape, strides, padding="SAME")
+		act = tf.nn.bias_add(conv, b)
+		act = tf.nn.dropout(act, gb.conv_drop)
+		return act
 
-def transition_layer(_input, phase, pool_depth=2, name='trans'):
-	with tf.variable_scope(name):
-		out_features = int(int(_input.get_shape()[-1]) * gb.reduction)
-		output = tf.nn.relu(_input)
-		output = conv_layer(output, out_features, filters=1, name=name+'_comp')
-		output = pool(output, k=2, d=pool_depth, name=name)
-	return output
+# Convolutional layer (Dropout: 2%)
+def last_convolution(input_v, size_out, name="conv"):
+	with tf.name_scope(name):
+		w = tf.Variable(tf.truncated_normal([1, 1, 1, 150, size_out], stddev=0.1), name="W")
+		b = tf.Variable(tf.zeros([size_out]), name="B")
+		conv = tf.nn.conv3d(input_v, w, strides=[1, 1, 1, 1, 1], padding="SAME")
+		act = tf.nn.bias_add(conv, b)
+		return act
 
-def pool(_input, k, d=2, width_k=None, type='max', k_stride=None, d_stride=None, k_stride_width=None,name='pool'):
-	ksize = [1, d, d, d, 1]
-	strides = [1, k, k, k, 1]
-	padding = 'SAME'
-	if type is 'max':
-		output = tf.nn.max_pool3d(_input, ksize, strides, padding, name=name+'_pool')
-	elif type is 'avg':
-		output = tf.nn.avg_pool3d(_input, ksize, strides, padding, name=name+'_pool')
-	else:
-		output = None
-	return output
+def create_path(x, num_path):
+	"""
+	-----------------------------------INPUTS-----------------------------------
+	num_path: string that indicates which path we are making.
+	gb.convolutions: array with the number of INPUT channels in each convolutional layer
+	gb.residuals: array with the layers were the connections will be. The output of 
+	these will be combined with the output from 2 layers behind. ex: the output 
+	from the 4th layer will be fused with the output from the second.
+		res1: layer to be added (in the example was the layer number 2)
+	-----------------------------------OUTPUT-----------------------------------
+	The result of the last convolution 
+	"""
+	input_v = x # Patches of the batch
+	counter = 0
+	for layer in range(1, len(gb.convolutions)): 
+		if layer > 1:
+			input_v = output # Output de la capa anterior
+		name = "conv_"  + num_path + '_' + str(layer)
+		conv = conv_layer(input_v, gb.convolutions[layer-1], gb.convolutions[layer], name)
+		output = conv
 
-def dropout(_input, prob, phase, name):
-	if prob < 1:
-		output = tf.cond(phase, lambda: tf.nn.dropout(_input, prob, name=name), lambda: _input)
-	else:
-		output = _input
-	return output
-
-# Architecture
-
-def create_path(x, phase):
-	net = conv_layer(x, gb.convolutions[0][0], filters=1, name='conv0')
-	if gb.cumulative:
-		conv = Cumulative(net, phase)
-	else:
-		conv = Progressive(net, name, phase)
-	return conv
-
-def Cumulative(input_v, phase):
-	output = input_v
-	upsample = [None]*gb.total_blocks
-	for block in range(gb.total_blocks):
-		with tf.variable_scope('denseBlock' + str(block)):
-			output = dense_block(output, phase)
-		if block != 0:
-			factor = 2**block
-			temp = deconv_layer(output, factor, phase, 'deconv'+str(block))
-			# upsample[block] = verify_shape(temp, input_v)
+		# # Residual connections 
+		if layer == gb.residuals[counter]:
+			if tf.shape(conv)[-1] != tf.shape(saved)[-1]:
+				bc_size = tf.shape(saved)[0]
+				im_size = tf.shape(saved)[1]
+				fm_size = (tf.shape(conv)[-1] - tf.shape(saved)[-1])/2
+				pad_size = [bc_size, im_size, im_size, im_size, fm_size]
+				pad = tf.zeros(pad_size, tf.float32)
+				saved = tf.concat([pad,saved,pad], -1)
+			output = tf.add(conv, saved)
+			if counter < (len(gb.residuals) - 1):
+				counter += 1
 		else:
-			upsample[block] = output # tenía input_v. Corrección: 30/04/2018 - 21:35 (último: train10)
+			output = conv
 
-		output = transition_layer(output, phase, 2, name='trn'+str(block))
-	output = tf.concat(upsample, axis=-1)
+		res1 = gb.residuals[counter] - 2
+		if layer == res1:
+			size = tf.shape(conv)[1] - 4
+			saved = tf.slice(conv, [0, 2, 2, 2, 0], [-1,size,size,size,-1]) 
 	return output
 
-def Progressive(input_v, phase):
-	output = input_v
-	for block in range(gb.total_blocks):
-		with tf.variable_scope('denseBlock' + str(block)):
-			output = dense_block(output, phase)
-		if block != (gb.total_blocks - 1):
-			output = transition_layer(output, phase, 2, name='trn'+str(block))
-	factor = 2**(gb.total_blocks - 1)
-	output = deconv_layer(output, factor, phase, 'deconv_final')
-	output = verify_shape(output, input_v)
-	return output
-
-def dense_block(_input, phase):
-	# initial_conv = conv_layer(_input, gb.convolutions[0][0], filters=1, name='initial_conv')
-	# output = tf.nn.relu(initial_conv)
-	output = _input
-	num_layers = len(gb.convolutions)
-	for layer in range(num_layers-1):
-		output = add_internal_layer(output, layer, phase, name=str(layer))
-		# output = conv_layer(output, gb.convolutions[layer+1][0], filters=1, name='_trans'+str(layer))
-		# output = tf.nn.relu(output)
-		# pdb.set_trace()
-	
-	output = add_internal_layer(output, -1, phase, name='_int'+str(num_layers))
-	return output
-
-def add_internal_layer(_input, layer, phase, name='int'):
-	with tf.variable_scope('rnext_' + name):
-		comp_out = resnext(_input, gb.convolutions[layer], phase)
-		# comp_out = tf.add(comp_out,_input)
-	output = tf.concat(axis=4, values=(_input, comp_out))
-	return output
-
-def resnext(input_v, sizes, phase):   
-    block = [None]*gb.cardinality
-    for index in range(gb.cardinality):
-        block[index] = tf.nn.relu(input_v)
-        block[index] = conv_layer(block[index], sizes[0], filters=1, name='card'+str(index)+'_0')
-
-        block[index] = tf.nn.relu(block[index])
-        block[index] = conv_layer(block[index], sizes[1], filters=3, name='card'+str(index)+'_1')
-    merge = tf.concat(block, axis=-1)
-    nextUnit = tf.nn.relu(merge)
-    nextUnit = conv_layer(nextUnit, sizes[2], filters=1, name='card_2')
-    return nextUnit 
-
-def fc_block(concatenated, phase):
+def dense_block(concatenated):
+	"""
+	residual must be at least 2 to make a residual connection (lower numbers won't 
+	have a res1 to combine with)
+	"""
+	residual = gb.fc_residual
+	input_v = concatenated
+	res1 = residual - 1
 	ch = 150
-	with tf.variable_scope('fc_block'):
-		for fc in range(1, gb.fc_layers+1):
-			name = 'fc' + str(fc)
-			conv = fc_layer(concatenated, ch, phase, name)
-			concatenated = conv
-		# conv = fc_layer(concatenated, gb.num_classes, phase, 'last_fc')
-	return concatenated
+	for dense in range(1, gb.fc_layers+1):
+		if dense > 1:
+			input_v = output
 
-# ------ Others ------
-def verify_shape(upsample, original):
-	# In case the shape had changed due to the input size and number of blocks ¡¡REVISAR!!
-	outSizes = upsample.get_shape().as_list()
-	dif = tf.abs(tf.shape(original)[1] - tf.shape(upsample)[1])
-	if dif != 0:
-		out_shape = tf.stack([outSizes[0], tf.shape(original)[1], tf.shape(original)[1], tf.shape(original)[1], outSizes[-1]])
-		output = tf.slice(upsample, [0, dif, dif, dif, 0], out_shape)
-		output.set_shape([outSizes[0],None,None,None,outSizes[-1]])
-	else:
-		output = upsample
-	return output
+		name = "dense_" + str(dense)
+		fc_out = dense_layer(input_v, ch, name)
+
+		if residual > 1 and dense == res1:
+			saved = fc_out
+
+		if residual > 1 and dense == residual:
+			output = tf.add(fc_out, saved)
+		else:
+			output = fc_out
+
+	return fc_out
+
+def make_placeholders(sizes, name):
+	x = [] 
+	for i in range(gb.num_paths):
+		names = (name + str(i))
+		new_shape = [None, None, None, None, gb.num_ch]
+		x.append(tf.placeholder(tf.float32, shape=new_shape, name=names))
+	return x
 
 def calculate_accuracy(im, lab): 
 	im = tf.cast(im, tf.float32)
@@ -168,30 +136,19 @@ def calculate_accuracy(im, lab):
 	accuracy = tf.divide(right, total)
 	return accuracy
 
-def summary_image(im, corte, name):
-	ind = im[3:10:3,corte,:,:,0]
-	ind = tf.expand_dims(ind, -1)
-	tf.summary.image(name + str(0), ind)
+def size_rf_patch(convs, small=gb.min_patches):
+	# Sizes and receptive field of the patches
+	out = small*gb.downsample[-1] 
+	input_v = [out + convs*2] 
+	rf = 3 + 2*(convs - 1) # Receptive field
+	for i in gb.downsample:
+		new = out/i + 2*convs
+		input_v.append(new) 
+	return [input_v, out], rf
 
-def make_placeholders(name, shape):
-	x = []
-	for i in range(gb.num_paths):
-		names = (name + str(i))
-		x.append(tf.placeholder(tf.float32, shape=shape, name=names))
-	return x
-
-def restore_model(mode, sess):
-	ckpt = tf.train.get_checkpoint_state(gb.LOGDIR)
-	loadpath = ckpt.model_checkpoint_path
-	saver = tf.train.import_meta_graph(loadpath + '.meta')
-	graph = tf.get_default_graph()  
-	saver.restore(sess, loadpath)
-	x = tensor_names(mode)
-
-	index = loadpath.find('ckpt-')+5
-	last = int(loadpath[index:])
-	print '------------ Model', last, 'restored ------------', gb.LOGDIR
-	return graph, x, last
+def make_hparam_string(use_two_fc, use_two_conv):
+	conv_param = "conv=2" if use_two_conv else "conv=21"
+	return "lr_%.0E,%s" % (gb.learning_rate, conv_param) if use_two_conv else "conv=21"
 
 def tensor_names(mode):
 	x = []
@@ -199,4 +156,15 @@ def tensor_names(mode):
 		x.append('x' + str(i) + ':0')
 	if mode == 'train':
 		x.append('y:0')
+		x.append('weights:0')
 	return x
+
+def test_sizes_patches():
+	sizes = [gb.test_patches]
+	convs = len(gb.convolutions) - 1
+	out = sizes[0] - 2*convs
+	for i in gb.downsample:
+		new_out = math.ceil(out/float(i))
+		new_in = new_out + 2*convs
+		sizes.append(int(new_in))
+	return [sizes, out]
