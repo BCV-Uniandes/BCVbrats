@@ -1,10 +1,9 @@
 class gb(object):
     # Paths
-	LOGDIR = '/media/SSD3/Densenext_3.0/TRAIN/train9/'
-	outpath = '/media/SSD3/Densenext_3.0/TEST/val/'
-	impath = '/media/SSD3/Densenext/Paths/Train/train'
-	# testpath = '/media/SSD3/Densenext/Paths/Train/train'
-	testpath = '/media/SSD3/Densenext/Paths/Val/test'
+	LOGDIR = '/media/SSD3/Densenext/TRAIN/model1/'
+	outpath = '/media/SSD3/Densenext/TEST/val/'
+	impath = '/media/SSD3/Densenext/Paths/Train/'
+	testpath = '/media/SSD3/Densenext/Paths/Val/'
 
 	# Set variables
 	learning_rate = 0.0001
@@ -22,14 +21,9 @@ class gb(object):
 	num_cases = 285 # Number of patients in the dataset
 
 	# Architecture parameters
-	cumulative = True
-	num_paths = 2 # First will be normal, the others will receive a downsampled image
-	downsample = [3] # Factors to downsample inputs
+	num_paths = 4 # First will be normal, the others will receive a downsampled image
+	downsample = [3, 6, 8] # Factors to downsample inputs
 	fc_layers = 2 # Number of fully connected layers
 	fc_drop = 0.5 # The probability that each element is kept
-	total_blocks = 4
-	cardinality = 2
 	convolutions = [[8,4,8],[7,4,7],[6,4,6],[5,4,5],[4,4,4]] # initial convolution + layers [block]
-	reduction = 1.0/8 # Compression of the number of feature maps in the transition layers
-	bc_mode = False
 	conv_drop = 0.98
