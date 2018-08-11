@@ -23,9 +23,7 @@ def train(mode,load):
 			# Create placeholders
 			x = make_placeholders(sizes, 'x')
 			y = tf.placeholder(tf.float32, shape=[None, None, None, None], name = "y")
-			weights = tf.placeholder(tf.float32, shape=[None, None, None, None], name = "weights")
 			x.append(y)
-			x.append(weights)
 
 			# Create the pathways
 			outputs = [[] for _ in range(gb.num_paths)]
