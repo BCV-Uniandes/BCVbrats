@@ -191,6 +191,7 @@ def test(mode):
 
 				prob_out = []
 				count = 0
+				# Processing and reconstruction of the input image
 				for iter2 in range(patches[0]):
 					temporal = []
 					for iter1 in range(patches[-1]):
