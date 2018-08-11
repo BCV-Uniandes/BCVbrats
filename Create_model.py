@@ -17,7 +17,7 @@ def conv_layer(input_v, size_in, size_out, name="conv"):
 		act = tf.nn.dropout(act, gb.conv_drop)
 		return act
 
-# Fully connected layer (Dropout: 50%) (Revisar: activación y sizes)
+# Fully connected layer (Dropout: 50%)
 def dense_layer(input_v, ch_out, name="conv"):
 	with tf.name_scope(name):
 		size = input_v.get_shape().as_list()
@@ -156,7 +156,6 @@ def tensor_names(mode):
 		x.append('x' + str(i) + ':0')
 	if mode == 'train':
 		x.append('y:0')
-		x.append('weights:0')
 	return x
 
 def test_sizes_patches():
