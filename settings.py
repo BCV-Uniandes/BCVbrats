@@ -11,7 +11,7 @@ class gb(object):
 	num_epochs = 15
 	sub_epochs = 20
 	batch_size = 10
-	factor = 100 # Number of patients per sub-epoch
+	factor = 100 # Number of patients per epoch
 	patches_per_patient = 20 # cuadrar para que sea divisible en num_classes (-1)
 	num_classes = 5 # 2 o 5, binary or all
 	num_ch = 4
