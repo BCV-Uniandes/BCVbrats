@@ -100,7 +100,7 @@ def train(mode,load):
 
 			writer.add_graph(sess.graph)
 			image_list, label_list = get_list(mode)
-			num_it = (gb.iterations*gb.patches_per_patient)/gb.batch_size
+			num_it = (gb.factor*gb.patches_per_patient)/gb.batch_size
 			count = last*gb.sub_epochs*num_it
 			num_subepoch = last*gb.sub_epochs
 			epochs_to_train = gb.num_epochs-last
@@ -115,7 +115,7 @@ def train(mode,load):
 					sess.run(reduce_lr)
 					print "New learning rate:", sess.run(learning_rate)
 
-				cases = random.sample(lista, gb.iterations)
+				cases = random.sample(lista, gb.factor)
 				for subepoch in range(gb.sub_epochs):
 					num_subepoch += 1
 					data_subepoch = input_pipeline(itemgetter(*cases)(image_list), itemgetter(*cases)(label_list), sizes, num_subepoch)
@@ -158,7 +158,6 @@ def test(mode):
 		outpath = '/media/user_home1/ladaza/Docker/data/results/'
 		patient_list = os.listdir(testpath)
 		patient_list.remove('results')
-
 
 		with tf.Session() as sess:
 			ckpt = tf.train.get_checkpoint_state(gb.LOGDIR)
