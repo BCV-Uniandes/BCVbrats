@@ -68,7 +68,7 @@ def create_path(x, num_path):
 	counter = 0
 	for layer in range(1, len(gb.convolutions)): 
 		if layer > 1:
-			input_v = output # Output de la capa anterior
+			input_v = output
 		name = "conv_"  + num_path + '_' + str(layer)
 		conv = conv_layer(input_v, gb.convolutions[layer-1], gb.convolutions[layer], name)
 		output = conv
