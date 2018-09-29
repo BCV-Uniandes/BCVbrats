@@ -1,5 +1,6 @@
 # BCVbrats
 Silvana Castillo, Laura Daza, Luis Carlos Rivera, Pablo Arbeláez, [Brain Tumor Segmentation and Parsing on MRIs Using Multiresolution Nerual Networks.](https://link.springer.com/chapter/10.1007/978-3-319-75238-9_29) 
+
 [Project Page](https://biomedicalcomputervision.uniandes.edu.co/index.php/research?id=16)
 
 # Dependencies
