@@ -1,9 +1,9 @@
 class gb(object):
     # Paths
-	LOGDIR = '/media/SSD3/Densenext/TRAIN/model1/'
-	outpath = '/media/SSD3/Densenext/TEST/val/'
-	impath = '/media/SSD3/Densenext/Paths/Train/'
-	testpath = '/media/SSD3/Densenext/Paths/Val/'
+	LOGDIR = '/TRAIN/model/'
+	outpath = '/TEST/val/'
+	impath = '/Paths/Train/'
+	testpath = '/Paths/Test/'
 
 	# Set variables
 	learning_rate = 0.0001
